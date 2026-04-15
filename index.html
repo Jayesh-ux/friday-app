@@ -174,15 +174,17 @@
     async function sendMessage() {
       if (!state.input.trim() || state.isStreaming) return;
       
+      console.log('FRIDAY: Sending message...');
+      
       const userMsg = { role: 'user', content: state.input.trim() };
       state.messages.push(userMsg);
-      const inputText = state.input;
       state.input = '';
       state.isStreaming = true;
-      state.currentResponse = '';
       render();
       
       try {
+        console.log('FRIDAY: Calling API at', `${API_BASE}/api/chat`);
+        
         const res = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -194,7 +196,14 @@
           })
         });
         
+        console.log('FRIDAY: Response status:', res.status);
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        
         const data = await res.json();
+        console.log('FRIDAY: Response data:', data);
         
         if (data.choices?.[0]?.message?.content) {
           const content = data.choices[0].message.content;
@@ -205,17 +214,23 @@
             localStorage.setItem('friday_tokens', state.totalTokens);
           }
           
-          // Auto speak
           const textOnly = content.replace(/```[\s\S]*?```/g, '');
           speak(textOnly);
+        } else if (data.error) {
+          state.messages.push({ role: 'assistant', content: `Error: ${data.error}` });
         }
         
       } catch (err) {
+        console.error('FRIDAY: Error:', err);
         state.messages.push({ 
           role: 'assistant', 
-          content: `Connection error: ${err.message}` 
+          content: `Connection error: ${err.message}. Check console for details.` 
         });
       }
+      
+      state.isStreaming = false;
+      render();
+    }
       
       state.isStreaming = false;
       state.currentResponse = '';
@@ -368,8 +383,23 @@
     window.addEventListener('online', () => { state.online = true; render(); });
     window.addEventListener('offline', () => { state.online = false; render(); });
 
+    // Debug on load
+    console.log('FRIDAY: Starting...');
+    console.log('FRIDAY: API_BASE =', API_BASE);
+    console.log('FRIDAY: Origin =', window.location.origin);
+
     // Initial render
     render();
+    
+    // Test API connection
+    fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'ping' }] })
+    })
+    .then(r => r.json())
+    .then(d => console.log('FRIDAY: API Test OK:', d))
+    .catch(e => console.error('FRIDAY: API Test FAILED:', e));
   </script>
 </body>
 </html>
