@@ -1,21 +1,31 @@
-const SYSTEM_PROMPT = `You are FRIDAY - A smart, friendly female AI assistant.
-Be brief. Be helpful. Max 100 words unless code needed.`;
+const SYSTEM_PROMPT = `You are FRIDAY - A smart, friendly female AI assistant with a warm personality.
+You help with coding, questions, and conversation.
+Be concise, helpful, and friendly.`;
 
-// Demo responses when API is unavailable
+// Demo responses for when API is unavailable
 const DEMO_RESPONSES = [
-  "Hello! I'm FRIDAY. How can I help you today?",
-  "That's an interesting question. How can I assist you with your code?",
-  "I'm here to help! What would you like to work on?",
-  "Great question! Let me help you figure that out.",
-  "I'm ready to assist. What do you need?"
+  "Hello! I'm FRIDAY, your AI assistant. How can I help you today?",
+  "That's interesting! Tell me more about what you're working on.",
+  "Great question! Let me help you with that.",
+  "I'm here to help! What would you like to know?",
+  "How can I assist you today? Ask me anything!",
 ];
 
 async function handler(req, res) {
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method === 'GET') {
     return res.status(200).json({ 
       status: 'ok', 
       name: 'FRIDAY API',
-      demo: true 
+      version: '1.0'
     });
   }
 
@@ -33,20 +43,19 @@ async function handler(req, res) {
       });
     }
 
-    // Try to call opencode API
+    // Try opencode API
     try {
       const response = await fetch('https://api.opencode.ai/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'claude',
           messages: [
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content: userMsg }
           ],
-          max_tokens: 500
+          max_tokens: 500,
+          stream: false
         })
       });
 
@@ -54,20 +63,26 @@ async function handler(req, res) {
         const data = await response.json();
         return res.status(200).json(data);
       }
-    } catch (apiError) {
-      console.log('API call failed, using demo response');
+    } catch (e) {
+      console.log('opencode API unavailable, using demo mode');
     }
 
-    // Fallback to demo response
-    const demoResponse = DEMO_RESPONSES[Math.floor(Math.random() * DEMO_RESPONSES.length)];
+    // Demo response
+    const demo = DEMO_RESPONSES[Math.floor(Math.random() * DEMO_RESPONSES.length)];
+    const responseLength = Math.ceil(userMsg.length / 4);
     
     res.status(200).json({
       choices: [{
         message: {
           role: 'assistant',
-          content: `${demoResponse}\n\n(Note: Configure your API key at api.opencode.ai for full functionality)`
+          content: `${demo}\n\n(Demo mode - Configure API at api.opencode.ai for full functionality)`
         }
-      }]
+      }],
+      usage: {
+        prompt_tokens: responseLength,
+        completion_tokens: Math.ceil(demo.length / 4),
+        total_tokens: responseLength + Math.ceil(demo.length / 4)
+      }
     });
 
   } catch (error) {

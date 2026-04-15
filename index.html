@@ -134,20 +134,24 @@
   <div id="app" class="h-full flex flex-col"></div>
 
   <script>
-    // Same origin - API and frontend on same Vercel deployment
-    const API_BASE = ''; // Empty = same origin
+    // API Backend URL
+    const API_BASE = 'https://friday-api-one.vercel.app';
     
     async function callAPI(messages) {
-      const res = await fetch(`/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: messages })
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'API Error' }));
-        throw new Error(err.error || 'API Error');
+      try {
+        const res = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: messages })
+        });
+        const data = await res.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        return data;
+      } catch (error) {
+        throw new Error(error.message || 'API Error');
       }
-      return await res.json();
     }
 
     let state = {
