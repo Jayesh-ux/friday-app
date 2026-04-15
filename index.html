@@ -90,7 +90,6 @@
     const SYSTEM_PROMPT = `You are FRIDAY - Tony Stark's female AI assistant.
 - Be conversational, warm, and helpful
 - Keep responses under 50 words unless code
-- Use minimal tokens
 - Speak naturally like a real assistant`;
 
     // ====== STATE ======
@@ -103,8 +102,20 @@
       isMuted: false,
       totalTokens: parseInt(localStorage.getItem('friday_tokens') || '0'),
       currentResponse: '',
-      online: navigator.onLine
+      online: navigator.onLine,
+      toasts: []
     };
+    
+    // ====== TOAST SYSTEM ======
+    function showToast(message, type = 'info') {
+      const id = Date.now();
+      state.toasts.push({ id, message, type });
+      render();
+      setTimeout(() => {
+        state.toasts = state.toasts.filter(t => t.id !== id);
+        render();
+      }, 5000);
+    }
 
     // ====== SPEECH RECOGNITION ======
     let recognition = null;
@@ -174,7 +185,7 @@
     async function sendMessage() {
       if (!state.input.trim() || state.isStreaming) return;
       
-      console.log('FRIDAY: Sending message...');
+      showToast('Sending message...', 'info');
       
       const userMsg = { role: 'user', content: state.input.trim() };
       state.messages.push(userMsg);
@@ -183,7 +194,7 @@
       render();
       
       try {
-        console.log('FRIDAY: Calling API at', `${API_BASE}/api/chat`);
+        showToast('Calling AI...', 'info');
         
         const res = await fetch(`${API_BASE}/api/chat`, {
           method: 'POST',
@@ -196,18 +207,18 @@
           })
         });
         
-        console.log('FRIDAY: Response status:', res.status);
+        showToast(`Response: ${res.status}`, res.ok ? 'success' : 'error');
         
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}`);
         }
         
         const data = await res.json();
-        console.log('FRIDAY: Response data:', data);
         
         if (data.choices?.[0]?.message?.content) {
           const content = data.choices[0].message.content;
           state.messages.push({ role: 'assistant', content });
+          showToast('Response received!', 'success');
           
           if (data.usage?.total_tokens) {
             state.totalTokens += data.usage.total_tokens;
@@ -217,23 +228,19 @@
           const textOnly = content.replace(/```[\s\S]*?```/g, '');
           speak(textOnly);
         } else if (data.error) {
+          showToast(`Error: ${data.error}`, 'error');
           state.messages.push({ role: 'assistant', content: `Error: ${data.error}` });
         }
         
       } catch (err) {
-        console.error('FRIDAY: Error:', err);
+        showToast(`Error: ${err.message}`, 'error');
         state.messages.push({ 
           role: 'assistant', 
-          content: `Connection error: ${err.message}. Check console for details.` 
+          content: `Connection error: ${err.message}` 
         });
       }
       
       state.isStreaming = false;
-      render();
-    }
-      
-      state.isStreaming = false;
-      state.currentResponse = '';
       render();
     }
 
@@ -267,6 +274,19 @@
             </button>
           </div>
         </header>
+
+        <!-- Toast Notifications -->
+        <div class="fixed top-16 left-4 right-4 z-50 space-y-2 pointer-events-none">
+          ${state.toasts.map(t => `
+            <div class="px-4 py-2 rounded-lg text-sm font-medium pointer-events-auto ${
+              t.type === 'error' ? 'bg-red-500/90 text-white' :
+              t.type === 'success' ? 'bg-green-500/90 text-white' :
+              'bg-cyan-500/90 text-white'
+            } shadow-lg">
+              ${t.type === 'error' ? '❌' : t.type === 'success' ? '✅' : 'ℹ️'} ${escapeHtml(t.message)}
+            </div>
+          `).join('')}
+        </div>
 
         <!-- Messages -->
         <main class="flex-1 overflow-y-auto p-4 pb-32 scrollbar-hide">
@@ -383,23 +403,24 @@
     window.addEventListener('online', () => { state.online = true; render(); });
     window.addEventListener('offline', () => { state.online = false; render(); });
 
-    // Debug on load
-    console.log('FRIDAY: Starting...');
-    console.log('FRIDAY: API_BASE =', API_BASE);
-    console.log('FRIDAY: Origin =', window.location.origin);
-
     // Initial render
     render();
     
-    // Test API connection
-    fetch(`${API_BASE}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: 'ping' }] })
-    })
-    .then(r => r.json())
-    .then(d => console.log('FRIDAY: API Test OK:', d))
-    .catch(e => console.error('FRIDAY: API Test FAILED:', e));
+    // Test API connection and show toast
+    setTimeout(() => {
+      showToast('Connecting to AI...', 'info');
+      fetch(`${API_BASE}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'ping' }] })
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.choices) showToast('FRIDAY Online!', 'success');
+        else showToast('AI Error', 'error');
+      })
+      .catch(e => showToast('Connection Failed', 'error'));
+    }, 1500);
   </script>
 </body>
 </html>
